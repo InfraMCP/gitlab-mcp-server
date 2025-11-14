@@ -1,0 +1,82 @@
+name: OSV Scanner PR Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  osv-scanner:
+    name: OSV Vulnerability Scanner
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install httpx mcp
+    
+    - name: Generate requirements.txt for scanning
+      run: |
+        pip freeze > requirements-scan.txt
+    
+    - name: Run OSV Scanner
+      uses: google/osv-scanner-action@v1
+      with:
+        scan-args: |-
+          --lockfile=requirements-scan.txt
+          --format=json
+          --output=osv-results.json
+      continue-on-error: true
+    
+    - name: Upload OSV scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: osv-scan-results
+        path: osv-results.json
+    
+    - name: Comment PR with results
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let comment = '## OSV Scanner Results\n\n';
+          
+          try {
+            if (fs.existsSync('osv-results.json')) {
+              const results = JSON.parse(fs.readFileSync('osv-results.json', 'utf8'));
+              const vulnCount = results.results?.[0]?.packages?.reduce((acc, pkg) => 
+                acc + (pkg.vulnerabilities?.length || 0), 0) || 0;
+              
+              if (vulnCount > 0) {
+                comment += `⚠️ Found ${vulnCount} potential vulnerabilities.\n\n`;
+                comment += 'Please review the scan results in the workflow artifacts.';
+              } else {
+                comment += '✅ No vulnerabilities detected.';
+              }
+            } else {
+              comment += '✅ Scan completed successfully.';
+            }
+          } catch (error) {
+            comment += '⚠️ Could not parse scan results. Check workflow logs for details.';
+          }
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

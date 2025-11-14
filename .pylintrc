@@ -1,0 +1,13 @@
+[MESSAGES CONTROL]
+# Disable specific warnings that are acceptable for this codebase
+disable=
+    too-many-arguments,
+    too-many-positional-arguments
+
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=100
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=10

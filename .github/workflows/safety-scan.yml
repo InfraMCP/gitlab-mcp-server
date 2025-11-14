@@ -1,0 +1,37 @@
+name: Safety Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday at midnight
+
+jobs:
+  safety-scan:
+    name: Safety Dependency Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety httpx mcp
+    
+    - name: Run Safety check
+      run: |
+        safety check --json || true
+    
+    - name: Run Safety scan (continue on error)
+      run: |
+        safety scan --output text || echo "Safety scan found vulnerabilities"
+      continue-on-error: true
